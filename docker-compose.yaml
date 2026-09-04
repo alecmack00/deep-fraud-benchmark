@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mlflow:
+    build: .
+    container_name: fraud_benchmark_mlflow
+    command: mlflow server --backend-store-uri sqlite:////app/data/mlflow/mlruns.db --default-artifact-root /app/models/artifacts --host 0.0.0.0 --port 5001
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./models/artifacts:/app/models/artifacts
+      - ./data/mlflow:/app/data/mlflow
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    container_name: fraud_benchmark_dashboard
+    command: streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5001
+    volumes:
+      - .:/app
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    restart: unless-stopped

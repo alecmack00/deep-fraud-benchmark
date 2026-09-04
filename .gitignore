@@ -1,0 +1,134 @@
+# ==============================================================================
+# Enterprise Fraud Detection & Sequence Benchmark (.gitignore)
+# ==============================================================================
+
+# --- Python & Bytecode ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual Environments ---
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# --- Large Datasets & Processed Tensors (IEEE-CIS, PaySim) ---
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/mlflow/*
+!data/mlflow/.gitkeep
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npy
+*.npz
+
+# --- Model Checkpoints, Serialized Weights & Scalers ---
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+models/artifacts/*
+!models/artifacts/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.joblib
+*.pkl
+*.pickle
+*.onnx
+*.bin
+
+# --- MLflow & Experiment Tracking ---
+mlruns/
+mlartifacts/
+outputs/
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+mlruns.db
+mlruns.db-shm
+mlruns.db-wal
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Optuna Studies & Caches ---
+optuna_study.db
+*.optuna
+
+# --- Jupyter Notebooks & Checkpoints ---
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+*.ipynb_checkpoints
+
+# --- Streamlit & Web App Local State ---
+.streamlit/secrets.toml
+
+# --- Testing, Coverage & Profiling ---
+.tox/
+.nox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+
+# --- Linters, Formatters & Type Checkers ---
+.ruff_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# --- IDEs & Local Developer Environment ---
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS-Specific Files ---
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# --- Secrets & Environment Variables ---
+.env
+.env.*
+!.env.example

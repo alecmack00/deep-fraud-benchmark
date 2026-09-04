@@ -1,0 +1,70 @@
+# Git & CI/CD
+.git/
+.github/
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Testing & Linters
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Raw and Processed Datasets
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/mlflow/*
+!data/mlflow/.gitkeep
+*.parquet
+*.csv
+*.tsv
+*.h5
+*.npy
+*.npz
+
+# Model Weights & Artifacts (Mount via volume at runtime)
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+models/artifacts/*
+!models/artifacts/.gitkeep
+*.pt
+*.pth
+*.joblib
+*.pkl
+
+# MLflow Tracking & Databases
+mlruns/
+mlartifacts/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Notebook Checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IDE & OS-Specific
+.vscode/
+.idea/
+.DS_Store
+.DS_Store?
+._*
+
+# Environment Secrets
+.env
+.env.*
