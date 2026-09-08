@@ -1,0 +1,37 @@
+# Deep Sequence Models Configuration
+
+lstm:
+  input_dim: null  # Dynamically set from feature dimensions
+  hidden_size: 128
+  num_layers: 2
+  bidirectional: true
+  dropout: 0.2
+  head_hidden_dim: 64
+
+transformer:
+  input_dim: null  # Dynamically set from feature dimensions
+  d_model: 128
+  nhead: 4
+  num_layers: 3
+  dim_feedforward: 512
+  dropout: 0.1
+  activation: "gelu"
+
+loss:
+  type: "focal"  # 'focal' or 'weighted_bce'
+  focal_alpha: 0.75
+  focal_gamma: 2.0
+  pos_weight: null  # pos_weight (e.g. 27.5) is used exclusively when type: "weighted_bce" to prevent redundant >80x weighting
+
+training:
+  batch_size: 128
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  max_epochs: 25
+  early_stopping_patience: 5
+  eval_metric: "pr_auc"
+  use_amp: true  # Automatic Mixed Precision: active on CUDA; safely guarded/conditional on Apple Silicon MPS
+  grad_clip_norm: 1.0
+  device: "auto"  # 'cuda', 'mps', or 'cpu'
+  random_state: 42
+
