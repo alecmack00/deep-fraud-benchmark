@@ -159,9 +159,11 @@ class DeepSequenceTrainer:
         self,
         train_loader: DataLoader,
         dev_loader: DataLoader,
+        trial: Any | None = None,
     ) -> dict[str, Any]:
         """
         Train sequence model with early stopping on Dev PR-AUC.
+        Supports optional Optuna trial reporting and dynamic pruning.
         """
         logger.info(
             f"Starting training for {self.model_name} on {self.device} (AMP={self.use_amp})..."
@@ -234,6 +236,17 @@ class DeepSequenceTrainer:
                 f"Dev PR-AUC: {dev_pr_auc:.4f} | "
                 f"Dev ROC-AUC: {dev_roc_auc:.4f}"
             )
+
+            # Optuna intermediate reporting and pruning
+            if trial is not None:
+                trial.report(dev_pr_auc, step=epoch - 1)
+                if trial.should_prune():
+                    import optuna
+
+                    logger.info(
+                        f"Optuna trial {trial.number} pruned at epoch {epoch} (PR-AUC: {dev_pr_auc:.4f})"
+                    )
+                    raise optuna.TrialPruned()
 
             # Early stopping check on Dev PR-AUC
             if dev_pr_auc > best_pr_auc:
