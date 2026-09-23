@@ -256,6 +256,11 @@ class BenchmarkMLflowTracker:
                 json.dump(summary, f, indent=2)
             mlflow.log_artifact(str(summary_path))
 
+            # Save test predictions npz for interactive dashboard analysis
+            pred_path = artifacts_path / "test_predictions.npz"
+            np.savez(pred_path, y_true=y_true, y_pred_proba=y_pred_proba)
+            mlflow.log_artifact(str(pred_path))
+
             # Optional model logging with signature inference and Model Registry
             if model is not None:
                 self._log_model_artifact(
