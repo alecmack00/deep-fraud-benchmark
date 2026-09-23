@@ -86,7 +86,9 @@ class PurgedGroupTimeSeriesSplit(BaseCrossValidator):
             val_indices = np.where(val_mask)[0]
 
             if len(val_indices) == 0:
-                logger.warning(f"CV Fold {fold + 1}: Empty validation window. Skipping.")
+                logger.warning(
+                    f"CV Fold {fold + 1}: Empty validation window. Skipping."
+                )
                 continue
 
             # 2. Base candidate train: strictly prior to validation window
@@ -98,7 +100,9 @@ class PurgedGroupTimeSeriesSplit(BaseCrossValidator):
 
             # 4. Group entity purge: drop all historical entries for entities in val set
             val_entities = set(group_arr[val_indices])
-            entity_overlap_mask = np.isin(group_arr, list(val_entities)) & candidate_train_mask
+            entity_overlap_mask = (
+                np.isin(group_arr, list(val_entities)) & candidate_train_mask
+            )
 
             # Combined purge mask
             to_purge_mask = temporal_buffer_mask | entity_overlap_mask

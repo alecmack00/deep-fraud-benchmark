@@ -156,7 +156,9 @@ class OptunaHyperparameterTuner:
         input_dim: int,
         epochs_per_trial: int = 5,
     ) -> dict[str, Any]:
-        logger.info(f"Starting Optuna sweep for Transformer ({self.n_trials} trials)...")
+        logger.info(
+            f"Starting Optuna sweep for Transformer ({self.n_trials} trials)..."
+        )
 
         def objective(trial: optuna.Trial) -> float:
             d_model = trial.suggest_categorical("d_model", [64, 128])

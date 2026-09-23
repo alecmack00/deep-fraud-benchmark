@@ -69,9 +69,13 @@ class CrossValidationConfig(BaseModel):
     def sync_purge_buffer(cls, data: Any) -> Any:
         if isinstance(data, dict):
             if "purge_buffer_seconds" in data and "purge_buffer_hours" not in data:
-                data["purge_buffer_hours"] = float(data["purge_buffer_seconds"]) / 3600.0
+                data["purge_buffer_hours"] = (
+                    float(data["purge_buffer_seconds"]) / 3600.0
+                )
             elif "purge_buffer_hours" in data and "purge_buffer_seconds" not in data:
-                data["purge_buffer_seconds"] = float(data["purge_buffer_hours"]) * 3600.0
+                data["purge_buffer_seconds"] = (
+                    float(data["purge_buffer_hours"]) * 3600.0
+                )
         return data
 
 

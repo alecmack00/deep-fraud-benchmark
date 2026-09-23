@@ -55,6 +55,7 @@ models/checkpoints/*
 !models/checkpoints/.gitkeep
 models/artifacts/*
 !models/artifacts/.gitkeep
+!models/artifacts/leaderboard.csv
 *.pt
 *.pth
 *.ckpt
@@ -118,6 +119,10 @@ htmlcov/
 *.swp
 *.swo
 *~
+
+# --- Local Workspace Notes & Plans ---
+/implementation_plan.md
+/walkthrough.md
 
 # --- OS-Specific Files ---
 .DS_Store

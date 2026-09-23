@@ -59,9 +59,7 @@ class PCARepresentationLearner:
 
         # Ensure batch_size is at least n_eval if specified
         batch_size = (
-            max(self.batch_size, n_eval)
-            if self.batch_size is not None
-            else None
+            max(self.batch_size, n_eval) if self.batch_size is not None else None
         )
 
         self.pca_ = IncrementalPCA(
@@ -84,7 +82,9 @@ class PCARepresentationLearner:
                 self.n_components_ = n_eval
             self.n_components_ = min(max(3, self.n_components_), max_possible)
 
-        selected_idx = min(self.n_components_ - 1, len(self.cumulative_variance_ratio_) - 1)
+        selected_idx = min(
+            self.n_components_ - 1, len(self.cumulative_variance_ratio_) - 1
+        )
         logger.info(
             f"Selected k={self.n_components_} components explaining "
             f"{self.cumulative_variance_ratio_[selected_idx] * 100:.2f}% cumulative variance "

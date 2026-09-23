@@ -375,9 +375,7 @@ class BenchmarkMLflowTracker:
             )
         else:
             p, r, _ = precision_recall_curve(y_true, y_pred)
-            ax.plot(
-                r, p, color="#2563eb", lw=2, label=f"PR curve (AUC = {pr_auc:.4f})"
-            )
+            ax.plot(r, p, color="#2563eb", lw=2, label=f"PR curve (AUC = {pr_auc:.4f})")
             base_rate = float(np.mean(y_true))
             ax.axhline(
                 base_rate,
@@ -411,7 +409,11 @@ class BenchmarkMLflowTracker:
         else:
             fpr, tpr, _ = roc_curve(y_true, y_pred)
             ax.plot(
-                fpr, tpr, color="#10b981", lw=2, label=f"ROC curve (AUC = {roc_auc:.4f})"
+                fpr,
+                tpr,
+                color="#10b981",
+                lw=2,
+                label=f"ROC curve (AUC = {roc_auc:.4f})",
             )
             ax.plot([0, 1], [0, 1], color="gray", linestyle="--")
             ax.legend(loc="lower right")
@@ -448,7 +450,11 @@ class BenchmarkMLflowTracker:
                 label=f"Reliability (Brier={brier:.4f})",
             )
             ax.plot(
-                [0, 1], [0, 1], linestyle="--", color="gray", label="Perfect calibration"
+                [0, 1],
+                [0, 1],
+                linestyle="--",
+                color="gray",
+                label="Perfect calibration",
             )
             ax.legend(loc="upper left")
 
