@@ -1,0 +1,39 @@
+name: Model Evaluation & Benchmark Verification
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "configs/**"
+      - "run_pipeline.py"
+
+jobs:
+  backtest-verification:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install System Libraries & Dependencies
+      run: |
+        sudo apt-get update && sudo apt-get install -y libgomp1
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Execute End-to-End Pipeline Quick Backtest
+      run: |
+        python run_pipeline.py --stage all --quick
+
+    - name: Validate Generated Artifacts
+      run: |
+        test -f models/artifacts/leaderboard.csv
+        test -f models/artifacts/latent_space_dev.npz
+        test -f models/checkpoints/preprocessor.joblib
+        echo "All critical benchmark artifacts successfully generated."
