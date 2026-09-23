@@ -31,6 +31,20 @@ streamlit run dashboard/app.py --server.port 8501
 ```
 Open **[http://localhost:8501](http://localhost:8501)** in your browser.
 
+### Dashboard Visual Previews
+
+#### Leaderboard & Model Competency Matrix
+![Leaderboard Matrix](docs/images/01_leaderboard.png)
+
+#### Dynamic Financial Loss & Decision Threshold Calibration
+![Curves & Calibration](docs/images/02_curves_calibration.png)
+
+#### 3D Latent Space & PCA Outlier Explorer
+![Latent Space Explorer](docs/images/03_latent_space.png)
+
+#### Production SLA & Single-Sample Latency Profiler
+![Latency Profiler](docs/images/04_latency_profiler.png)
+
 ---
 
 ## System Architecture
@@ -138,6 +152,9 @@ deep-fraud-sequence-benchmark/
 │       ├── 02_curves_and_calibration.py# PR/ROC curves & financial loss slider
 │       ├── 03_latent_space.py          # 3D PCA clusters & K-Means centroid projection
 │       └── 04_latency_profiler.py      # Production SLAs & latency vs PR-AUC profiler
+│
+├── docs/                               # Documentation visual assets
+│   └── images/                         # Full-resolution dashboard screenshots
 │
 ├── src/                                # Core library source code
 │   ├── data/                           # Ingestion, preprocessor, and sequence builder
