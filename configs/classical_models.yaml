@@ -1,0 +1,45 @@
+# Classical Models and Dimensionality Reduction Configuration
+
+decomposition:
+  pca:
+    variance_threshold: 0.90
+    n_components: null  # Auto-selected to reach variance_threshold
+    batch_size: 4096
+    random_state: 42
+
+clustering:
+  minibatch_kmeans:
+    n_clusters: 8
+    batch_size: 2048
+    random_state: 42
+    compute_distances: true
+
+tree_classifiers:
+  xgboost:
+    tree_method: "hist"
+    max_depth: 6
+    learning_rate: 0.05
+    n_estimators: 500
+    subsample: 0.8
+    colsample_bytree: 0.8
+    scale_pos_weight: "auto"  # "auto" or null dynamically calculates N_neg / N_pos on the training fold; falls back to 27.5
+    early_stopping_rounds: 30
+    eval_metric: "aucpr"
+    random_state: 42
+
+  random_forest:
+    n_estimators: 300
+    max_depth: 15
+    class_weight: "balanced_subsample"
+    min_samples_split: 10
+    min_samples_leaf: 4
+    n_jobs: -1
+    random_state: 42
+
+  linear_svm:
+    loss: "hinge"  # True Linear SVM; Platt calibration (CalibratedClassifierCV sigmoid) converts decision function values to probabilities
+    penalty: "l2"
+    alpha: 0.0001
+    max_iter: 2000
+    calibration_method: "sigmoid"
+    random_state: 42
