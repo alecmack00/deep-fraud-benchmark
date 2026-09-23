@@ -57,14 +57,55 @@ def _sanitize_params(params: dict[str, Any], max_len: int = 450) -> dict[str, An
     return sanitized
 
 
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    y_pred_proba: np.ndarray,
+    criterion: str = "f1",
+    fn_cost: float = 100.0,
+    fp_cost: float = 10.0,
+) -> float:
+    """
+    Sweeps decision thresholds in [0.01, 0.99] to find optimal threshold
+    maximizing F1 or minimizing expected business/financial loss.
+    """
+    y_true = np.asarray(y_true, dtype=np.int32)
+    y_pred_proba = np.asarray(y_pred_proba, dtype=np.float32)
+
+    if len(np.unique(y_true)) < 2:
+        return 0.50
+
+    thresholds = np.linspace(0.01, 0.99, 99)
+    best_score = -1.0 if criterion == "f1" else float("inf")
+    best_th = 0.50
+
+    for th in thresholds:
+        preds = (y_pred_proba >= th).astype(np.int32)
+        if criterion == "f1":
+            score = float(f1_score(y_true, preds, pos_label=1, zero_division=0))
+            if score > best_score:
+                best_score = score
+                best_th = float(th)
+        elif criterion == "cost":
+            cm = confusion_matrix(y_true, preds, labels=[0, 1])
+            _tn, fp, fn, _tp = cm.ravel()
+            cost = fn * fn_cost + fp * fp_cost
+            if cost < best_score:
+                best_score = cost
+                best_th = float(th)
+
+    return float(best_th)
+
+
 def calculate_metrics(
     y_true: np.ndarray,
     y_pred_proba: np.ndarray,
     threshold: float = 0.5,
+    optimal_threshold: float | None = None,
 ) -> dict[str, float]:
     """
     Computes imbalance-aware evaluation metrics:
-    PR-AUC, ROC-AUC, Macro F1, Positive Class F1, Recall at 95% Precision, Brier Score.
+    PR-AUC, ROC-AUC, Macro F1, Positive Class F1 (at threshold and optimal threshold),
+    Recall at 95% Precision, Brier Score.
     """
     y_true = np.asarray(y_true, dtype=np.int32)
     y_pred_proba = np.asarray(y_pred_proba, dtype=np.float32)
@@ -76,15 +117,30 @@ def calculate_metrics(
             "roc_auc": 0.5,
             "macro_f1": 0.0,
             "fraud_f1": 0.0,
+            "fraud_f1_opt": 0.0,
+            "fraud_f1_50": 0.0,
+            "optimal_threshold": 0.5,
             "recall_at_95_precision": 0.0,
             "brier_score": 0.0,
         }
 
     unique_classes = np.unique(y_true)
-    y_pred_bin = (y_pred_proba >= threshold).astype(np.int32)
-    macro_f1 = float(f1_score(y_true, y_pred_bin, average="macro", zero_division=0))
-    pos_f1 = float(f1_score(y_true, y_pred_bin, pos_label=1, zero_division=0))
+    y_pred_bin_default = (y_pred_proba >= threshold).astype(np.int32)
+    macro_f1 = float(
+        f1_score(y_true, y_pred_bin_default, average="macro", zero_division=0)
+    )
+    pos_f1_50 = float(
+        f1_score(y_true, y_pred_bin_default, pos_label=1, zero_division=0)
+    )
     brier = float(brier_score_loss(y_true, y_pred_proba))
+
+    opt_th = (
+        optimal_threshold
+        if optimal_threshold is not None
+        else find_optimal_threshold(y_true, y_pred_proba)
+    )
+    y_pred_bin_opt = (y_pred_proba >= opt_th).astype(np.int32)
+    pos_f1_opt = float(f1_score(y_true, y_pred_bin_opt, pos_label=1, zero_division=0))
 
     if len(unique_classes) < 2 or 1 not in unique_classes:
         logger.warning(
@@ -95,7 +151,10 @@ def calculate_metrics(
             "pr_auc": 0.0,
             "roc_auc": 0.5,
             "macro_f1": macro_f1,
-            "fraud_f1": pos_f1,
+            "fraud_f1": pos_f1_opt,
+            "fraud_f1_opt": pos_f1_opt,
+            "fraud_f1_50": pos_f1_50,
+            "optimal_threshold": float(opt_th),
             "recall_at_95_precision": 0.0,
             "brier_score": brier,
         }
@@ -112,7 +171,10 @@ def calculate_metrics(
         "pr_auc": pr_auc,
         "roc_auc": roc_auc,
         "macro_f1": macro_f1,
-        "fraud_f1": pos_f1,
+        "fraud_f1": pos_f1_opt,
+        "fraud_f1_opt": pos_f1_opt,
+        "fraud_f1_50": pos_f1_50,
+        "optimal_threshold": float(opt_th),
         "recall_at_95_precision": recall_at_p95,
         "brier_score": brier,
     }
@@ -187,6 +249,7 @@ class BenchmarkMLflowTracker:
         params: dict[str, Any],
         y_true: np.ndarray,
         y_pred_proba: np.ndarray,
+        optimal_threshold: float | None = None,
         operational_metrics: dict[str, float] | None = None,
         artifacts_dir: str = "models/artifacts",
         model: Any | None = None,
@@ -201,7 +264,9 @@ class BenchmarkMLflowTracker:
         artifacts_path = Path(artifacts_dir) / model_name
         artifacts_path.mkdir(parents=True, exist_ok=True)
 
-        metrics = calculate_metrics(y_true, y_pred_proba)
+        metrics = calculate_metrics(
+            y_true, y_pred_proba, optimal_threshold=optimal_threshold
+        )
         if operational_metrics:
             metrics.update(operational_metrics)
 

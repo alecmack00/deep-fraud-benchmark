@@ -38,7 +38,7 @@ class BinaryFocalLoss(nn.Module):
         targets = targets.view_as(logits).float()
 
         bce_loss = F.binary_cross_entropy_with_logits(logits, targets, reduction="none")
-        probs = torch.sigmoid(logits)
+        probs = torch.sigmoid(logits).clamp(min=1e-6, max=1.0 - 1e-6)
         # p_t is the probability of the true class
         p_t = probs * targets + (1.0 - probs) * (1.0 - targets)
         # alpha_t is class weighting

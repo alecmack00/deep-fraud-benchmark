@@ -23,9 +23,9 @@ def test_load_data_config_valid():
     """Verify load_data_config parses and validates configs/data_config.yaml."""
     cfg = load_data_config()
     assert isinstance(cfg, DataConfig)
-    assert cfg.split_ratios.train == 0.98
-    assert cfg.split_ratios.dev == 0.01
-    assert cfg.split_ratios.test == 0.01
+    assert cfg.split_ratios.train == 0.80
+    assert cfg.split_ratios.dev == 0.10
+    assert cfg.split_ratios.test == 0.10
     assert cfg.cross_validation.purge_buffer_seconds == 86400.0
     assert cfg.cross_validation.purge_buffer_hours == 24.0
     assert cfg.sequence.min_history == 1

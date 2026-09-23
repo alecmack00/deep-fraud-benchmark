@@ -26,11 +26,11 @@ schema:
     - "D1"
   synthesized_entity_col: "card_id"
 
-# Big-data split: 98% Train, 1% Dev, 1% Held-out Test
+# Stratified temporal split: 80% Train, 10% Dev, 10% Held-out Test
 split_ratios:
-  train: 0.98
-  dev: 0.01
-  test: 0.01
+  train: 0.80
+  dev: 0.10
+  test: 0.10
 
 cross_validation:
   n_splits: 5
@@ -43,6 +43,6 @@ feature_engineering:
   missing_categorical_token: "MISSING"
 
 sequence:
-  window_length: 20
+  window_length: 10
   stride: 1
-  min_history: 1  # Minimum event count to form a window; single-event cards (N=1) are left zero-padded to (1, 20, D)
+  min_history: 1  # Minimum event count to form a window; single-event cards (N=1) are left zero-padded to (1, 10, D)

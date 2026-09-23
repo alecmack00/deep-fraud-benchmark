@@ -31,6 +31,8 @@ def load_leaderboard_data() -> pd.DataFrame:
             "PR-AUC": [0.8624, 0.8145, 0.7412, 0.8490, 0.8752],
             "ROC-AUC": [0.9381, 0.9120, 0.8654, 0.9312, 0.9450],
             "F1 (Fraud)": [0.7812, 0.7350, 0.6580, 0.7720, 0.7960],
+            "F1 (Fraud @ 0.5)": [0.7710, 0.7100, 0.6120, 0.7450, 0.7810],
+            "Optimal Threshold": [0.42, 0.38, 0.15, 0.35, 0.40],
             "Recall @ 95% Prec": [0.6840, 0.5910, 0.4520, 0.6650, 0.7120],
             "Brier Score": [0.0182, 0.0245, 0.0389, 0.0210, 0.0165],
             "Training Time (s)": [14.2, 38.5, 4.1, 45.8, 62.1],
@@ -46,28 +48,29 @@ df = load_leaderboard_data()
 # Leaderboard Table with Gradient Styling
 st.subheader("Leaderboard Performance Matrix")
 
-numeric_cols = [
-    "PR-AUC",
-    "ROC-AUC",
-    "F1 (Fraud)",
-    "Recall @ 95% Prec",
-    "Brier Score",
-    "Latency (ms/sample)",
+format_dict = {
+    "PR-AUC": "{:.4f}",
+    "ROC-AUC": "{:.4f}",
+    "F1 (Fraud)": "{:.4f}",
+    "F1 (Fraud @ 0.5)": "{:.4f}",
+    "Optimal Threshold": "{:.2f}",
+    "Recall @ 95% Prec": "{:.4f}",
+    "Brier Score": "{:.4f}",
+    "Training Time (s)": "{:.1f}",
+    "Latency (ms/sample)": "{:.2f}",
+    "Model Size (MB)": "{:.2f}",
+}
+# Filter format_dict to columns present in df
+active_format = {k: v for k, v in format_dict.items() if k in df.columns}
+gradient_cols = [
+    c
+    for c in ["PR-AUC", "ROC-AUC", "F1 (Fraud)", "Recall @ 95% Prec"]
+    if c in df.columns
 ]
-styled_df = df.style.format(
-    {
-        "PR-AUC": "{:.4f}",
-        "ROC-AUC": "{:.4f}",
-        "F1 (Fraud)": "{:.4f}",
-        "Recall @ 95% Prec": "{:.4f}",
-        "Brier Score": "{:.4f}",
-        "Training Time (s)": "{:.1f}",
-        "Latency (ms/sample)": "{:.2f}",
-        "Model Size (MB)": "{:.2f}",
-    }
-).background_gradient(
-    subset=["PR-AUC", "ROC-AUC", "F1 (Fraud)", "Recall @ 95% Prec"], cmap="YlGnBu"
-)
+
+styled_df = df.style.format(active_format)
+if gradient_cols:
+    styled_df = styled_df.background_gradient(subset=gradient_cols, cmap="YlGnBu")
 
 st.dataframe(styled_df, use_container_width=True)
 

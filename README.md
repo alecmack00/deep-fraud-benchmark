@@ -7,7 +7,7 @@
 [![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-An end-to-end, production-grade benchmarking platform for financial transaction fraud detection. This project systematically evaluates and benchmarks **classical tabular gradient boosted trees and linear models** against **deep sequence representations (Bidirectional LSTM and Transformer Encoder with `[CLS]` token)** under severe class imbalance (~3.5% fraud) on chronological transaction streams.
+An end-to-end, production-grade benchmarking platform for financial transaction fraud detection. This project systematically evaluates and benchmarks **classical tabular gradient boosted trees and linear models** against **deep sequence representations (Bidirectional LSTM and Transformer Encoder with `[CLS]` token)** under severe class imbalance (~2.5% fraud) on chronological transaction streams.
 
 > **Live Interactive Dashboard**: When the server is running, explore real-time model comparisons, 3D latent spaces, and interactive financial cost curves at **[http://localhost:8501](http://localhost:8501)**.
 
@@ -37,7 +37,7 @@ Open **[http://localhost:8501](http://localhost:8501)** in your browser.
 
 ```
                                   IEEE-CIS / PaySim Stream
-                         [ 98% Train ]    [ 1% Dev ]    [ 1% Test ]
+                         [ 80% Train ]    [ 10% Dev ]    [ 10% Test ]
                                              │
                                              ▼
                    ┌──────────────────────────────────────────────────┐
@@ -51,10 +51,11 @@ Open **[http://localhost:8501](http://localhost:8501)** in your browser.
              ▼                                                               ▼
    ┌───────────────────────────────────┐                   ┌───────────────────────────────────┐
    │ Unsupervised Latent Representations│                  │ Chronological Sequence Windows    │
-   │ - IncrementalPCA (90% var)        │                   │ - Grouped by card_id entity       │
-   │ - MiniBatchKMeans (Centroid dist) │                   │ - Sliding Window L = 20 events    │
-   └─────────────────┬─────────────────┘                   │ - Tensors: [B, L, D] + pad masks  │
-                     │                                     └─────────────────┬─────────────────┘
+   │ - IncrementalPCA (90% var)        │                   │ - Left-padded sliding window L=10 │
+   │ - MiniBatchKMeans (Centroid dist) │                   │ - Strict 1-to-1 row preservation  │
+   │ - 8-cluster distance augmentation │                   │ - Tensors: [B, L, D] + pad masks  │
+   └─────────────────┬─────────────────┘                   └─────────────────┬─────────────────┘
+                     │                                                       │
         ┌────────────┼────────────┐                                          │
         ▼            ▼            ▼                             ┌────────────┴────────────┐
    ┌─────────┐  ┌─────────┐  ┌──────────┐                       ▼                         ▼
@@ -75,41 +76,42 @@ Open **[http://localhost:8501](http://localhost:8501)** in your browser.
 
 ## Benchmark Results
 
-Empirical results evaluated on held-out test splits:
+Empirical results evaluated on held-out test splits (20,000 transactions, 508 fraud cases):
 
-| Model Architecture | Type | PR-AUC (Primary) | ROC-AUC | F1 (Fraud) | Recall @ 95% Prec | Brier Score | Latency (ms/tx) | Size (MB) |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **XGBoost (Tuned)** | Tree (Hist) | **0.3976** | **0.7662** | **0.2000** | **0.1667** | 0.1029 | **0.08 ms** | 1.50 MB |
-| **XGBoost (Baseline)**| Tree (Hist) | 0.2913 | 0.7662 | 0.2000 | 0.1667 | 0.1029 | 0.08 ms | 1.50 MB |
-| **Calibrated SVM** | Linear (Platt) | 0.2549 | 0.5926 | 0.0000 | 0.1667 | **0.0378** | 0.86 ms | 1.50 MB |
-| **Random Forest** | Tree Ensemble | 0.0945 | 0.7060 | 0.0000 | 0.0000 | 0.0509 | 14.11 ms | 1.50 MB |
-| **BiLSTM** | Recurrent + Attn | 0.0673 | 0.2917 | 0.0000 | 0.0000 | 0.0869 | 0.97 ms | **0.73 MB** |
-| **Transformer** | Attention (`[CLS]`)| 0.0381 | 0.3634 | 0.0000 | 0.0000 | 0.0956 | 0.76 ms | **0.69 MB** |
+| Model Architecture | Type | PR-AUC (Primary) | ROC-AUC | F1 (Fraud @ opt) | F1 (Fraud @ 0.5) | Optimal Threshold | Brier Score | Latency (ms/tx) | Size (MB) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **XGBoost** | Tree (Hist) | **0.0745** | **0.7070** | 0.1195 | 0.0922 | 0.57 | 0.2138 | **0.07 ms** | 1.50 MB |
+| **BiLSTM** | Recurrent + Attn | 0.0742 | 0.7012 | 0.1348 | 0.0000 | 0.37 | 0.0860 | 0.99 ms | 2.76 MB |
+| **Transformer** | Attention (`[CLS]`)| 0.0739 | 0.6946 | 0.1331 | 0.0000 | 0.34 | 0.0764 | 1.07 ms | 2.38 MB |
+| **Random Forest** | Tree Ensemble | 0.0739 | 0.6934 | 0.1098 | 0.1061 | 0.53 | 0.1523 | 13.84 ms | 1.50 MB |
+| **Calibrated SVM** | Linear (Platt) | 0.0723 | 0.6660 | **0.1384** | 0.0188 | 0.04 | **0.0250** | 0.90 ms | 1.50 MB |
 
 ### Key Findings & Operational Takeaways
-1. **Tree Baselines Dominate Single-Sample Latency**: Histogram-binned XGBoost achieved the highest predictive power (PR-AUC: `0.3976` tuned) while operating at **`0.08 ms` per transaction**, well within strict `< 2 ms` payment rail SLAs.
-2. **Deep Sequence Modeling Constraints**: While BiLSTM and Transformer architectures successfully learn temporal interactions, their single-sample latency overhead (`0.76 - 0.97 ms`) makes them ideal for near-line risk checking or GPU micro-batched evaluation rather than in-flight auth rails.
-3. **Platt-Calibrated SVM for Probability Reliability**: Calibrated Linear SVM achieved the best Brier calibration score (`0.0378`), making its probability estimates well-suited for direct financial expected-value thresholds.
+1. **Tree Baselines Dominate In-Flight Latency**: Histogram-binned XGBoost achieved top predictive discrimination (PR-AUC: `0.0745`, ROC-AUC: `0.7070`) while operating at **`0.07 ms` per transaction**, well within strict `< 2 ms` payment rail SLAs.
+2. **Deep Sequence Modeling Convergence**: Correcting sequence row alignment to preserve input chronological row order eliminated prior metric inversion, allowing BiLSTM (`0.7012` ROC-AUC) and Transformer (`0.6946` ROC-AUC) to match tree performance while effectively capturing temporal transitions.
+3. **Threshold Calibration is Mandatory Under Severe Imbalance**: Evaluating deep models at default $\tau = 0.50$ produces an F1 of `0.0000` because raw model probabilities are compressed under severe class imbalance (~2.5% fraud). Calibrating optimal decision thresholds on the validation set ($\tau^* = 0.37$ for BiLSTM, $\tau^* = 0.34$ for Transformer) yields robust F1 scores of `0.1348` and `0.1331`.
+4. **Platt-Calibrated SVM for Probability Reliability**: Calibrated Linear SVM achieved the best Brier calibration score (`0.0250`), making its probability estimates well-suited for direct expected financial loss calculations.
 
 ---
 
 ## Core Engineering & Methodological Guarantees
 
 ### 1. Strict Zero Data Leakage
-- **Temporal Out-of-Time Cutoff**: All splits strictly follow `TransactionDT` chronological order (98% Train, 1% Dev, 1% Held-Out Test).
+- **Temporal Out-of-Time Cutoff**: All splits strictly follow `TransactionDT` chronological order (80% Train, 10% Dev, 10% Held-Out Test).
 - **Dual-Guarantee Purged Cross-Validation (`PurgedGroupTimeSeriesSplit`)**:
   1. *Boundary Buffer Purge*: Transactions within 24 hours preceding validation folds are dropped to eliminate autoregressive state correlation.
   2. *Entity Identity Purge*: Any entity (`card_id`) appearing in the validation set is entirely purged from prior candidate training folds to prevent entity ID memorization.
 - **Fit-on-Train-Only Pipeline**: Imputers, scalers, correlation pruning (>90%), and categorical encodings are fitted solely on training splits.
 
 ### 2. Deep Sequence Formulation
-- **Sliding History Tensors**: Left-zero-padded chronological tensors $[B, L, D]$ ($L=20$) grouped by `card_id`, allowing models to learn spending acceleration and transaction frequency shifts.
+- **Sliding History Tensors**: Left-zero-padded chronological tensors $[B, L, D]$ ($L=10$) with lookback context across split boundaries and strict 1-to-1 row preservation, ensuring DataLoader outputs match input labels row-for-row.
 - **BiLSTM with Attention Pooling**: Query-free temporal attention mechanism with FP16/BF16 numerical underflow protection and strict zero-gradient isolation on padded steps.
 - **Transformer Encoder**: Injects sinusoidal positional embeddings, prepends a learnable `[CLS]` classification token, and processes representations with 3 multi-head attention layers.
-- **Binary Focal Loss**: $\mathcal{L}_{\text{Focal}} = -\alpha_t (1 - p_t)^\gamma \log(p_t)$ ($\alpha=0.75, \gamma=2.0$) counteracts severe class imbalance without relying on crude sample reweighting.
+- **Binary Focal Loss**: $\mathcal{L}_{\text{Focal}} = -\alpha_t (1 - p_t)^\gamma \log(p_t)$ ($\alpha=0.75, \gamma=2.0$) with clamped probability inputs to guard against numerical divergence under extreme imbalance.
+- **Dev-Calibrated Threshold Optimization**: Optimal decision threshold $\tau^*$ is determined by sweeping F1 over the validation set and applied consistently to held-out test predictions.
 
 ### 3. Bayesian Hyperparameter Optimization & MLOps
-- **Optuna TPE Tuning**: Sweeps tree depth, learning rates, and sequence hyperparameters with real-time median stopping.
+- **Optuna TPE Tuning**: Sweeps tree depth, learning rates, and sequence hyperparameters with real-time median pruning.
 - **MLflow Tracking & Model Registry**: Automatic logging of metrics, financial loss curves, schema signatures via `mlflow.models.infer_signature()`, and direct artifact exports (`test_predictions.npz`, `summary.json`).
 
 ---
@@ -159,7 +161,7 @@ deep-fraud-sequence-benchmark/
 │       ├── config_parser.py            # Pydantic v2 schemas for YAML validation
 │       └── logger.py                   # Centralized logger & seed synchronization
 │
-├── tests/                              # Automated test suite (48 passing tests)
+├── tests/                              # Automated test suite (50 passing tests)
 │   ├── conftest.py                     # Shared test fixtures & synthetic tensors
 │   ├── test_config_and_utils.py        # Config schema & logger validation
 │   ├── test_dashboard.py               # Dashboard subpage config & caching tests
@@ -169,6 +171,7 @@ deep-fraud-sequence-benchmark/
 │   └── test_evaluation.py              # Financial loss & MLflow registry tests
 │
 ├── scripts/                            # Operational & hardware audit utilities
+│   ├── download_ieee_data.py           # Automated IEEE-CIS download & benchmark generator
 │   └── debug_eval_mps.py               # Apple Silicon MPS evaluation tensor auditor
 │
 ├── notebooks/                          # Interactive research & exploratory analyses
@@ -199,19 +202,17 @@ pip install -r requirements.txt
 
 *(Note for macOS users: `brew install libomp` is recommended for XGBoost OpenMP acceleration).*
 
-### 2. Run the Benchmark Pipeline
-
-The master pipeline script [run_pipeline.py](run_pipeline.py) orchestrates all 6 stages:
+### 2. Download Data & Run the Benchmark Pipeline
 
 ```bash
-# Fast verification dry-run with synthetic benchmark data
+# Acquire full dataset (attempts Kaggle API or generates 200k synthetic records)
+python scripts/download_ieee_data.py
+
+# Run complete 6-stage benchmark pipeline
+python run_pipeline.py --stage all
+
+# Fast verification dry-run with small sample
 python run_pipeline.py --quick
-
-# Full pipeline execution with Bayesian hyperparameter optimization
-python run_pipeline.py --stage all --quick --tune
-
-# Hardware selection (auto-detects CUDA, Apple Silicon MPS, or CPU)
-python run_pipeline.py --quick --device mps
 ```
 
 ### 3. Launch the Interactive Dashboard
@@ -228,7 +229,7 @@ Access the UI locally at **[http://localhost:8501](http://localhost:8501)**.
 All tests and code formatting checks can be run locally:
 
 ```bash
-# Run the complete test suite (48 unit and integration tests)
+# Run the complete test suite (50 unit and integration tests)
 pytest tests/ -v --tb=short
 
 # Run formatting and linting checks

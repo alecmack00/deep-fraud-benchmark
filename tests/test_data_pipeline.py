@@ -417,3 +417,53 @@ def test_dataset_builder_cross_split_context_lookback():
         assert (x_seq[0, -1].numpy() == 99.0).all()
         # Earlier steps must be the train transactions (ones)
         assert (x_seq[0, :-1].numpy() == 1.0).all()
+
+
+def test_dataset_builder_strict_row_ordering_alignment():
+    """
+    Verify that TransactionSequenceDataset and DataLoader with shuffle=False
+    yield prediction targets strictly matching the input DataFrame row order,
+    preventing any label scrambling across interleaved entities.
+    """
+    import pandas as pd
+
+    from src.data.dataset_builder import build_dataloaders
+
+    D = 4
+    # Train data: some historical transactions
+    X_train = np.zeros((6, D), dtype=np.float32)
+    y_train = np.zeros(6, dtype=np.float32)
+    meta_train = pd.DataFrame(
+        {
+            "card_id": ["E1", "E2", "E1", "E3", "E2", "E3"],
+            "TransactionDT": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+
+    # Dev data: interleaved entities with distinct target values
+    X_dev = np.arange(10, 15, dtype=np.float32).reshape(5, 1).repeat(D, axis=1)
+    y_dev = np.array([1.0, 0.0, 1.0, 1.0, 0.0], dtype=np.float32)
+    meta_dev = pd.DataFrame(
+        {
+            "card_id": ["E2", "E1", "E3", "E1", "E2"],
+            "TransactionDT": [7.0, 8.0, 9.0, 10.0, 11.0],
+        }
+    )
+
+    _train_loader, dev_loader, _ = build_dataloaders(
+        train_data=(X_train, y_train, meta_train),
+        dev_data=(X_dev, y_dev, meta_dev),
+        window_length=5,
+        min_history=1,
+        batch_size=2,
+        use_context_history=True,
+    )
+
+    dev_yielded_targets = []
+    for _x_seq, y_batch, _pad_mask in dev_loader:
+        dev_yielded_targets.extend(y_batch.flatten().tolist())
+
+    assert len(dev_yielded_targets) == len(y_dev)
+    assert np.array_equal(
+        np.array(dev_yielded_targets), y_dev
+    ), f"Order mismatch! Expected {y_dev}, got {dev_yielded_targets}"

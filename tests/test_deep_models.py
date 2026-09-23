@@ -294,3 +294,59 @@ def test_trainer_evaluate_single_sample_batch():
     assert "pr_auc" in metrics
     assert "loss" in metrics
     assert not np.isnan(metrics["loss"])
+
+
+def test_overfitting_smoke_test_bilstm_and_transformer():
+    """
+    Mandatory 32-sample overfitting smoke test:
+    Assert that BiLSTM and Transformer can achieve ROC-AUC >= 0.95
+    and near-zero training loss on a 32-sample separable dataset.
+    """
+    from sklearn.metrics import roc_auc_score
+    from torch import optim
+
+    torch.manual_seed(42)
+    B, L, D = 32, 10, 16
+    y = torch.tensor([1.0] * 16 + [0.0] * 16).unsqueeze(-1)
+    x = torch.randn(B, L, D)
+    x[:16] += 2.0  # Clear positive signal
+    mask = torch.zeros(B, L, dtype=torch.bool)
+    mask[:, :4] = True  # First 4 steps are padded
+
+    loss_fn = BinaryFocalLoss(alpha=0.75, gamma=2.0)
+
+    # 1. BiLSTM Smoke Test
+    bilstm = BiLSTMFraudModel(input_dim=D, hidden_size=32, dropout=0.0)
+    opt_lstm = optim.AdamW(bilstm.parameters(), lr=1e-3)
+    for _ in range(30):
+        opt_lstm.zero_grad()
+        loss = loss_fn(bilstm(x, mask), y)
+        loss.backward()
+        opt_lstm.step()
+
+    with torch.no_grad():
+        preds_lstm = torch.sigmoid(bilstm(x, mask)).numpy().flatten()
+        auc_lstm = roc_auc_score(y.numpy().flatten(), preds_lstm)
+        assert (
+            auc_lstm >= 0.95
+        ), f"BiLSTM failed overfitting smoke test: AUC={auc_lstm:.4f}"
+        assert loss.item() < 0.05, f"BiLSTM loss too high: {loss.item():.4f}"
+
+    # 2. Transformer Smoke Test
+    transformer = TransformerEncoderFraudModel(
+        input_dim=D, d_model=32, nhead=2, num_layers=2, dropout=0.0
+    )
+    opt_tx = optim.AdamW(transformer.parameters(), lr=1e-3)
+    for _ in range(30):
+        opt_tx.zero_grad()
+        loss = loss_fn(transformer(x, mask), y)
+        loss.backward()
+        opt_tx.step()
+
+    with torch.no_grad():
+        preds_tx = torch.sigmoid(transformer(x, mask)).numpy().flatten()
+        auc_tx = roc_auc_score(y.numpy().flatten(), preds_tx)
+        assert (
+            auc_tx >= 0.95
+        ), f"Transformer failed overfitting smoke test: AUC={auc_tx:.4f}"
+        assert loss.item() < 0.05, f"Transformer loss too high: {loss.item():.4f}"

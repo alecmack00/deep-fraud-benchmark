@@ -46,23 +46,30 @@ class TransactionSequenceDataset(Dataset):
             self.features = np.vstack([ctx_features, features]).astype(np.float32)
             self.targets = np.concatenate([ctx_targets, targets]).astype(np.float32)
             all_meta = pd.concat([ctx_meta, meta_df], ignore_index=True)
-            is_eval = np.array(
-                [False] * len(ctx_features) + [True] * len(features), dtype=bool
-            )
+            eval_offset = len(ctx_features)
         else:
             self.features = features.astype(np.float32)
             self.targets = targets.astype(np.float32)
             all_meta = meta_df.reset_index(drop=True)
-            is_eval = np.ones(len(features), dtype=bool)
+            eval_offset = 0
+
+        eval_len = len(features)
 
         # Slices stored as (window_indices_array, target_idx)
         self.windows: list[tuple[np.ndarray, int]] = []
-        self._build_sliding_windows(all_meta, is_eval, entity_col, time_col)
+        self._build_sliding_windows(
+            all_meta=all_meta,
+            eval_offset=eval_offset,
+            eval_len=eval_len,
+            entity_col=entity_col,
+            time_col=time_col,
+        )
 
     def _build_sliding_windows(
         self,
-        meta_df: pd.DataFrame,
-        is_eval: np.ndarray,
+        all_meta: pd.DataFrame,
+        eval_offset: int,
+        eval_len: int,
         entity_col: str,
         time_col: str,
     ) -> None:
@@ -72,35 +79,42 @@ class TransactionSequenceDataset(Dataset):
         df_idx = pd.DataFrame(
             {
                 "orig_idx": np.arange(len(self.features), dtype=np.int32),
-                "entity": meta_df[entity_col].values,
-                "time": meta_df[time_col].values,
-                "is_eval": is_eval,
+                "entity": all_meta[entity_col].values,
+                "time": all_meta[time_col].values,
             }
         ).sort_values(by=["entity", "time"])
 
-        grouped = df_idx.groupby("entity", sort=False)
+        entity_history = (
+            df_idx.groupby("entity", sort=False)["orig_idx"].apply(np.array).to_dict()
+        )
+
+        idx_to_entity_pos: dict[int, tuple[object, int]] = {}
+        for e, hist in entity_history.items():
+            for pos, idx_val in enumerate(hist):
+                idx_to_entity_pos[int(idx_val)] = (e, pos)
 
         windows_list: list[tuple[np.ndarray, int]] = []
-        for _, group in grouped:
-            indices = group["orig_idx"].to_numpy(dtype=np.int32)
-            eval_flags = group["is_eval"].to_numpy(dtype=bool)
-            n_events = len(indices)
+        for j in range(eval_len):
+            target_idx = eval_offset + j
+            if target_idx not in idx_to_entity_pos:
+                windows_list.append(
+                    (np.array([target_idx], dtype=np.int32), target_idx)
+                )
+                continue
 
-            for t in range(n_events):
-                # Only construct prediction targets for evaluation split rows
-                if not eval_flags[t]:
-                    continue
+            e, pos = idx_to_entity_pos[target_idx]
+            hist = entity_history[e]
+            start_pos = max(0, pos - self.window_length + 1)
+            window_indices = hist[start_pos : pos + 1]
 
-                start_idx = max(0, t - self.window_length + 1)
-                window_indices = indices[start_idx : t + 1]
-                if len(window_indices) < self.min_history:
-                    continue
-                target_idx = int(indices[t])
-                windows_list.append((window_indices, target_idx))
+            if len(window_indices) < self.min_history:
+                window_indices = np.array([target_idx], dtype=np.int32)
+
+            windows_list.append((window_indices, target_idx))
 
         self.windows = windows_list
         logger.info(
-            f"Constructed {len(self.windows)} sequence windows across {grouped.ngroups} entities."
+            f"Constructed {len(self.windows)} sequence windows strictly aligned 1-to-1 with evaluation rows across {len(entity_history)} entities."
         )
 
     def __len__(self) -> int:

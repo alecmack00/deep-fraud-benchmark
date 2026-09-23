@@ -27,7 +27,7 @@ from src.eda_baselines.tree_classifiers import (
     XGBoostFraudClassifier,
     save_baseline_model,
 )
-from src.tracking.mlflow_logger import BenchmarkMLflowTracker
+from src.tracking.mlflow_logger import BenchmarkMLflowTracker, find_optimal_threshold
 from src.tuning.optuna_tuner import OptunaHyperparameterTuner
 from src.utils.config_parser import load_data_config
 from src.utils.logger import get_logger, set_seed
@@ -60,7 +60,7 @@ def run_full_pipeline(
     # Transform splits using strictly train-fitted preprocessor
     X_train, y_train, meta_train = preprocessor.transform(train_df)
     X_dev, y_dev, meta_dev = preprocessor.transform(dev_df)
-    X_test, y_test, _meta_test = preprocessor.transform(test_df)
+    X_test, y_test, meta_test = preprocessor.transform(test_df)
 
     logger.info(
         f"Preprocessed Feature Matrix: Train={X_train.shape}, Dev={X_dev.shape}, Test={X_test.shape}"
@@ -89,7 +89,7 @@ def run_full_pipeline(
     # Augment tabular features with centroid Euclidean distance vectors
     X_train_aug = kmeans.augment_features(X_train, X_train_pca)
     X_dev_aug = kmeans.augment_features(X_dev, X_dev_pca)
-    kmeans.augment_features(X_test, X_test_pca)
+    X_test_aug = kmeans.augment_features(X_test, X_test_pca)
 
     # Save 3D coordinates for dashboard visualization
     Path("models/artifacts").mkdir(parents=True, exist_ok=True)
@@ -133,17 +133,21 @@ def run_full_pipeline(
     xgb_lat1 = ((time.perf_counter() - t_lat0) / 100.0) * 1000.0
 
     xgb_dev_probs = xgb_model.predict_proba(X_dev_aug)[:, 1]
+    xgb_test_probs = xgb_model.predict_proba(X_test_aug)[:, 1]
+    xgb_opt_th = find_optimal_threshold(y_dev, xgb_dev_probs, criterion="f1")
+
     results["XGBoost"] = tracker.log_run(
         model_name="XGBoost",
         params={"model": "XGBoost", "max_depth": 6, "n_estimators": 400},
-        y_true=y_dev,
-        y_pred_proba=xgb_dev_probs,
+        y_true=y_test,
+        y_pred_proba=xgb_test_probs,
+        optimal_threshold=xgb_opt_th,
         operational_metrics={
             "train_duration_sec": xgb_train_dur,
             "latency_b1_ms": xgb_lat1,
         },
         model=xgb_model,
-        input_example=X_dev_aug[:2],
+        input_example=X_test_aug[:2],
         registered_model_name="XGBoost_Baseline",
     )
 
@@ -160,21 +164,25 @@ def run_full_pipeline(
 
     t_lat0 = time.perf_counter()
     for _ in range(50):
-        _ = rf_model.predict_proba(X_dev_aug[:1])
+        _ = rf_model.predict_proba(X_test_aug[:1])
     rf_lat1 = ((time.perf_counter() - t_lat0) / 50.0) * 1000.0
 
     rf_dev_probs = rf_model.predict_proba(X_dev_aug)[:, 1]
+    rf_test_probs = rf_model.predict_proba(X_test_aug)[:, 1]
+    rf_opt_th = find_optimal_threshold(y_dev, rf_dev_probs, criterion="f1")
+
     results["RandomForest"] = tracker.log_run(
         model_name="RandomForest",
         params={"model": "RandomForest", "n_estimators": 200, "max_depth": 12},
-        y_true=y_dev,
-        y_pred_proba=rf_dev_probs,
+        y_true=y_test,
+        y_pred_proba=rf_test_probs,
+        optimal_threshold=rf_opt_th,
         operational_metrics={
             "train_duration_sec": rf_train_dur,
             "latency_b1_ms": rf_lat1,
         },
         model=rf_model,
-        input_example=X_dev_aug[:2],
+        input_example=X_test_aug[:2],
         registered_model_name="RandomForest_Baseline",
     )
 
@@ -187,21 +195,25 @@ def run_full_pipeline(
 
     t_lat0 = time.perf_counter()
     for _ in range(100):
-        _ = svm_model.predict_proba(X_dev_aug[:1])
+        _ = svm_model.predict_proba(X_test_aug[:1])
     svm_lat1 = ((time.perf_counter() - t_lat0) / 100.0) * 1000.0
 
     svm_dev_probs = svm_model.predict_proba(X_dev_aug)[:, 1]
+    svm_test_probs = svm_model.predict_proba(X_test_aug)[:, 1]
+    svm_opt_th = find_optimal_threshold(y_dev, svm_dev_probs, criterion="f1")
+
     results["CalibratedSVM"] = tracker.log_run(
         model_name="CalibratedSVM",
         params={"model": "CalibratedLinearSVM", "loss": "hinge"},
-        y_true=y_dev,
-        y_pred_proba=svm_dev_probs,
+        y_true=y_test,
+        y_pred_proba=svm_test_probs,
+        optimal_threshold=svm_opt_th,
         operational_metrics={
             "train_duration_sec": svm_train_dur,
             "latency_b1_ms": svm_lat1,
         },
         model=svm_model,
-        input_example=X_dev_aug[:2],
+        input_example=X_test_aug[:2],
         registered_model_name="CalibratedSVM_Baseline",
     )
 
@@ -211,10 +223,12 @@ def run_full_pipeline(
         logger.info("=" * 70)
 
         # Build sequence datasets
-        window_L = 10 if quick_mode else 20
-        train_loader, dev_loader, _ = build_dataloaders(
+        data_cfg = load_data_config()
+        window_L = data_cfg.sequence.window_length
+        train_loader, dev_loader, test_loader = build_dataloaders(
             train_data=(X_train_aug, y_train, meta_train),
             dev_data=(X_dev_aug, y_dev, meta_dev),
+            test_data=(X_test_aug, y_test, meta_test),
             window_length=window_L,
             batch_size=64 if quick_mode else 128,
         )
@@ -236,22 +250,34 @@ def run_full_pipeline(
             seq_length=window_L, feature_dim=feat_dim
         )
 
-        # Dev predictions
+        # Dev predictions for threshold calibration
         bilstm.eval()
-        lstm_preds = []
+        lstm_dev_preds = []
         with torch.no_grad():
             for x, _, m in dev_loader:
                 p = bilstm.predict_proba(
                     x.to(lstm_trainer.device), m.to(lstm_trainer.device)
                 )
-                lstm_preds.extend(p.cpu().reshape(-1).numpy())
-        lstm_preds_arr = np.array(lstm_preds)
+                lstm_dev_preds.extend(p.cpu().reshape(-1).numpy())
+        lstm_dev_preds_arr = np.array(lstm_dev_preds, dtype=np.float32)
+        lstm_opt_th = find_optimal_threshold(y_dev, lstm_dev_preds_arr, criterion="f1")
+
+        # Test predictions
+        lstm_test_preds = []
+        with torch.no_grad():
+            for x, _, m in test_loader:
+                p = bilstm.predict_proba(
+                    x.to(lstm_trainer.device), m.to(lstm_trainer.device)
+                )
+                lstm_test_preds.extend(p.cpu().reshape(-1).numpy())
+        lstm_test_preds_arr = np.array(lstm_test_preds, dtype=np.float32)
 
         results["BiLSTM"] = tracker.log_run(
             model_name="BiLSTM",
             params={"hidden_size": 128, "num_layers": 2, "window_length": window_L},
-            y_true=y_dev,
-            y_pred_proba=lstm_preds_arr,
+            y_true=y_test,
+            y_pred_proba=lstm_test_preds_arr,
+            optimal_threshold=lstm_opt_th,
             operational_metrics={
                 "train_duration_sec": lstm_fit_res["training_duration_sec"],
                 "latency_b1_ms": lstm_lat["latency_b1_ms_per_sample"],
@@ -280,14 +306,24 @@ def run_full_pipeline(
         )
 
         transformer.eval()
-        tx_preds = []
+        tx_dev_preds = []
         with torch.no_grad():
             for x, _, m in dev_loader:
                 p = transformer.predict_proba(
                     x.to(tx_trainer.device), m.to(tx_trainer.device)
                 )
-                tx_preds.extend(p.cpu().reshape(-1).numpy())
-        tx_preds_arr = np.array(tx_preds)
+                tx_dev_preds.extend(p.cpu().reshape(-1).numpy())
+        tx_dev_preds_arr = np.array(tx_dev_preds, dtype=np.float32)
+        tx_opt_th = find_optimal_threshold(y_dev, tx_dev_preds_arr, criterion="f1")
+
+        tx_test_preds = []
+        with torch.no_grad():
+            for x, _, m in test_loader:
+                p = transformer.predict_proba(
+                    x.to(tx_trainer.device), m.to(tx_trainer.device)
+                )
+                tx_test_preds.extend(p.cpu().reshape(-1).numpy())
+        tx_test_preds_arr = np.array(tx_test_preds, dtype=np.float32)
 
         results["Transformer"] = tracker.log_run(
             model_name="Transformer",
@@ -297,8 +333,9 @@ def run_full_pipeline(
                 "num_layers": 3,
                 "window_length": window_L,
             },
-            y_true=y_dev,
-            y_pred_proba=tx_preds_arr,
+            y_true=y_test,
+            y_pred_proba=tx_test_preds_arr,
+            optimal_threshold=tx_opt_th,
             operational_metrics={
                 "train_duration_sec": tx_fit_res["training_duration_sec"],
                 "latency_b1_ms": tx_lat["latency_b1_ms_per_sample"],
@@ -326,6 +363,8 @@ def run_full_pipeline(
                 "PR-AUC": m.get("pr_auc", 0.0),
                 "ROC-AUC": m.get("roc_auc", 0.0),
                 "F1 (Fraud)": m.get("fraud_f1", 0.0),
+                "F1 (Fraud @ 0.5)": m.get("fraud_f1_50", 0.0),
+                "Optimal Threshold": m.get("optimal_threshold", 0.5),
                 "Recall @ 95% Prec": m.get("recall_at_95_precision", 0.0),
                 "Brier Score": m.get("brier_score", 0.0),
                 "Training Time (s)": m.get("train_duration_sec", 0.0),
